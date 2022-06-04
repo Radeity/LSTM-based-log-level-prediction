@@ -5,10 +5,11 @@ import re
 
 from block import Block
 
-exclude_type = set(["Block", "SimpleName", "SimpleType"])
-LOG_TYPE = "ExpressionStatement"
-BLOCK_TYPE = set(["Block", "SwitchCase", "IfStatement"])
-LOG_PREFIX = set(["log.", "logg", "logl"])
+exclude_type = {"Block", "SimpleName", "SimpleType"}
+SEEK_LOG_TYPE = "ExpressionStatement"
+LOG_TYPE = "LogStatement"
+BLOCK_TYPE = {"Block", "SwitchCase", "IfStatement"}
+LOG_PREFIX = {"log.", "logg", "logl"}
 
 
 class Log:
@@ -43,16 +44,17 @@ def parse_logs(project_name):
 
 
 def parse_AST(project_name, logs):
-    log_idx = -1
+    log_idx = 0
     log_sum = len(logs)
     syntactic_feature = []
     end = 0
-    log_match_flag = True
+    log_match_flag = False
     blocks = []
-    log_block = Block("", "", "")
     last_block_end = 0
     last_method = ""
-    log_cnt = 1
+    log_cnt = 0
+    log_line = 0
+    stack = []
     for line in open("AST-{project_name}.txt".format(project_name=project_name)):
         match_item = re.match(
             r'<method>(.*)</method><type>(.*)</type><name>(.*)</name><begin>(.*)</begin><end>(.*)</end>',
@@ -65,45 +67,60 @@ def parse_AST(project_name, logs):
         cur_end_line = (int)(single_ast[4])
         cur_method = single_ast[0]
 
-        # new method (exist methods with same name)
+        # new block
         if single_ast[1] in BLOCK_TYPE or cur_begin_line > last_block_end:
-            last_block_end = (int)(single_ast[4])
             if log_match_flag:
-                log_block.syntactic_feature = copy.deepcopy(syntactic_feature)
-                # if log_idx == 10:
+                # log_block.syntactic_feature = copy.deepcopy(syntactic_feature)
+                # log_block.gen_combine_feature()
+                # blocks.append(log_block)
+
+                # if logs[log_idx].constant == "Updating last seen epoch from {} to {} for partition {}":
                 #     print(1)
-                blocks.append(log_block)
+
+                # log_block = Block(single_ast[0], logs[log_idx].log_level, logs[log_idx].constant)
+                log_block = Block(last_method, logs[log_idx].log_level, logs[log_idx].constant)
+                stack.append((last_block_end, log_block, syntactic_feature))
                 log_idx += log_cnt
                 if log_cnt > 1:
                     print("Missing {cnt} logs in method `{method}`".format(cnt=log_cnt - 1, method=last_method))
                 if log_idx >= log_sum:
                     break
-                log_block = Block(single_ast[0], logs[log_idx].log_level, logs[log_idx].constant)
                 log_match_flag = False
+                log_line = 0
                 log_cnt = 0
+
+            while len(stack) > 0 and cur_begin_line >= stack[-1][0]:
+                top = stack.pop()
+                top_log_block = top[1]
+                top_log_block.syntactic_feature = copy.deepcopy(syntactic_feature)
+                top_log_block.gen_combine_feature()
+                blocks.append(top_log_block)
+
+            last_block_end = (int)(single_ast[4])
+
 
         if last_method != cur_method or cur_end_line > end:
             last_method = cur_method
             end = cur_end_line
             syntactic_feature = []
 
-        # if single_ast[0] == "org.apache.kafka.clients.consumer.internals.OffsetsForLeaderEpochClient.handleResponse":
-        #     if single_ast[1] == LOG_TYPE:
-        #         print(1)
+        # if single_ast[0] == "org.apache.kafka.connect.data.Values.parse":
+        #     # if single_ast[1] == LOG_TYPE:
+        #     print(1)
+
         if single_ast[0] != logs[log_idx].callsite:
             continue
 
-        # if cur_begin_line > log_line or cur_end_line < log_line:
-        #     continue
-
-        if single_ast[1] not in exclude_type:
+        if cur_end_line > log_line and single_ast[1] not in exclude_type:
+        # if single_ast[1] not in exclude_type:
             syntactic_feature.append(single_ast[1])
 
-        if single_ast[1] == LOG_TYPE and single_ast[2][0:4].lower() in LOG_PREFIX:
+        if single_ast[1] == SEEK_LOG_TYPE and single_ast[2][0:4].lower() in LOG_PREFIX:
+            log_line = cur_end_line
+            syntactic_feature[-1] = LOG_TYPE
             log_match_flag = True
             log_cnt += 1
 
-    del blocks[0]
     ast_path = './Data/ast/ast-{project_name}.pkl'.format(project_name=project_name)
     with open(ast_path, 'wb') as pkl_file:
         pickle.dump(blocks, pkl_file)
@@ -125,7 +142,7 @@ if __name__ == '__main__':
         logs = parse_logs("kafka")
 
     # parse AST-*.txt
-    ast = parse_AST("kafka", logs)
+    # ast = parse_AST("kafka", logs)
 
     if os.path.exists("./Data/ast/ast-kafka.pkl"):
         ast = load_dumped_data("ast", "kafka")
