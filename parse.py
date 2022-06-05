@@ -2,10 +2,11 @@ import copy
 import os.path
 import pickle
 import re
+from collections import defaultdict
 
 from block import Block
 
-exclude_type = {"Block", "SimpleName", "SimpleType"}
+exclude_type = {"Block", "SimpleName", "SimpleType"}  # , "QualifiedName"}
 SEEK_LOG_TYPE = "ExpressionStatement"
 LOG_TYPE = "LogStatement"
 BLOCK_TYPE = {"Block", "SwitchCase", "IfStatement"}
@@ -22,7 +23,6 @@ class Log:
 
 def parse_logs(project_name):
     logs = []
-    s = set()
     for line in open("logs-{project_name}.txt".format(project_name=project_name)):
         match_item = re.match(
             r'<logcall>(.*)</logcall> <parameter>(.*)</parameter><constant>(.*)</constant><level>(.*)</level><callsite>(.*)</callsite><line>(.*)</line><superclass>(.*)</superclass>',
@@ -31,10 +31,6 @@ def parse_logs(project_name):
         for i in range(7):
             log_list.append(match_item.group(i + 1))
         log = Log(match_item.group(4), match_item.group(3), match_item.group(5), (int)(match_item.group(6)))
-        # if log.callsite in s:
-        #     print("conflict!!!" + log.callsite)
-        # else:
-        #     s.add(log.callsite)
         logs.append(log)
 
     logs_path = './Data/log/log-{project_name}.pkl'.format(project_name=project_name)
@@ -55,6 +51,7 @@ def parse_AST(project_name, logs):
     log_cnt = 0
     log_line = 0
     stack = []
+    # make sure the same order in log and ast file
     for line in open("AST-{project_name}.txt".format(project_name=project_name)):
         match_item = re.match(
             r'<method>(.*)</method><type>(.*)</type><name>(.*)</name><begin>(.*)</begin><end>(.*)</end>',
@@ -70,25 +67,21 @@ def parse_AST(project_name, logs):
         # new block
         if single_ast[1] in BLOCK_TYPE or cur_begin_line > last_block_end:
             if log_match_flag:
-                # log_block.syntactic_feature = copy.deepcopy(syntactic_feature)
-                # log_block.gen_combine_feature()
-                # blocks.append(log_block)
-
-                # if logs[log_idx].constant == "Updating last seen epoch from {} to {} for partition {}":
-                #     print(1)
-
-                # log_block = Block(single_ast[0], logs[log_idx].log_level, logs[log_idx].constant)
                 log_block = Block(last_method, logs[log_idx].log_level, logs[log_idx].constant)
+                # exist nested block, push into stack until meeting the block end line
                 stack.append((last_block_end, log_block, syntactic_feature))
                 log_idx += log_cnt
+                # like switch case, useless to log level prediction
                 if log_cnt > 1:
                     print("Missing {cnt} logs in method `{method}`".format(cnt=log_cnt - 1, method=last_method))
+                # all logs match
                 if log_idx >= log_sum:
                     break
                 log_match_flag = False
                 log_line = 0
                 log_cnt = 0
 
+            # meet the block end line, pop
             while len(stack) > 0 and cur_begin_line >= stack[-1][0]:
                 top = stack.pop()
                 top_log_block = top[1]
@@ -96,25 +89,24 @@ def parse_AST(project_name, logs):
                 top_log_block.gen_combine_feature()
                 blocks.append(top_log_block)
 
+            # help judge the new block
             last_block_end = (int)(single_ast[4])
 
-
+        # new method, use `cur_end_line > end` because polymorphism
         if last_method != cur_method or cur_end_line > end:
             last_method = cur_method
             end = cur_end_line
             syntactic_feature = []
 
-        # if single_ast[0] == "org.apache.kafka.connect.data.Values.parse":
-        #     # if single_ast[1] == LOG_TYPE:
-        #     print(1)
-
+        # not match any logs
         if single_ast[0] != logs[log_idx].callsite:
             continue
 
+        # add syntactic feature and exclude useless feature in advance
         if cur_end_line > log_line and single_ast[1] not in exclude_type:
-        # if single_ast[1] not in exclude_type:
             syntactic_feature.append(single_ast[1])
 
+        # match log statement
         if single_ast[1] == SEEK_LOG_TYPE and single_ast[2][0:4].lower() in LOG_PREFIX:
             log_line = cur_end_line
             syntactic_feature[-1] = LOG_TYPE
@@ -134,6 +126,21 @@ def load_dumped_data(type, project_name):
     return obj
 
 
+def count_feature(ast):
+    sync_count_dict = defaultdict(int)
+    message_count_dict = defaultdict(int)
+    for block in ast:
+        for feature in block.syntactic_feature:
+            sync_count_dict[feature] += 1
+        for feature in block.log_message_feature:
+            message_count_dict[feature] += 1
+
+    sorted_syn_feature = sorted(sync_count_dict.items(), reverse=True, key=lambda x: x[1])
+    sorted_msg_feature = sorted(message_count_dict.items(), reverse=True, key=lambda x: x[1])
+
+    return sorted_syn_feature, sorted_msg_feature
+
+
 if __name__ == '__main__':
     # parse logs-*.txt
     if os.path.exists("./Data/log/log-kafka.pkl"):
@@ -148,5 +155,9 @@ if __name__ == '__main__':
         ast = load_dumped_data("ast", "kafka")
     else:
         print(False)
+
+    sorted_syn_feature, sorted_msg_feature = count_feature(ast)
+    print(sorted_syn_feature)
+    print(sorted_msg_feature)
 
     print("ending the first step of preprocessing")
