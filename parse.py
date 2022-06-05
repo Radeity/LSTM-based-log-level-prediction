@@ -3,7 +3,6 @@ import os.path
 import pickle
 import re
 from collections import defaultdict
-
 from block import Block
 
 exclude_type = {"Block", "SimpleName", "SimpleType"}  # , "QualifiedName"}
@@ -148,7 +147,7 @@ if __name__ == '__main__':
     else:
         logs = parse_logs("kafka")
 
-    # parse AST-*.txt
+    # # parse AST-*.txt
     # ast = parse_AST("kafka", logs)
 
     if os.path.exists("./Data/ast/ast-kafka.pkl"):
@@ -156,8 +155,14 @@ if __name__ == '__main__':
     else:
         print(False)
 
+    idx = 0
+    for block in ast:
+        if len(block.combine_feature) > 100:
+            print('{idx} : {len}'.format(idx=idx, len=len(block.combine_feature)))
+        idx += 1
     sorted_syn_feature, sorted_msg_feature = count_feature(ast)
     print(sorted_syn_feature)
     print(sorted_msg_feature)
+
 
     print("ending the first step of preprocessing")
