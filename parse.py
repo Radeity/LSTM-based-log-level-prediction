@@ -158,7 +158,7 @@ if __name__ == '__main__':
         logs = parse_logs(project_name)
 
     # parse AST-*.txt
-    ast = parse_AST(project_name, logs)
+    # ast = parse_AST(project_name, logs)
 
     if os.path.exists("./Data/ast/ast-{project}.pkl".format(project=project_name)):
         ast = load_dumped_data("ast", project_name)

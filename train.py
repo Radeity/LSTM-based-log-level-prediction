@@ -1,4 +1,5 @@
 import os
+import sys
 from parse import load_dumped_data
 import pandas as pd
 import numpy as np
@@ -102,8 +103,9 @@ def stratified_random_sampling(X, Y):
 
 
 if __name__ == '__main__':
-    if os.path.exists("./Data/ast/ast-kafka.pkl"):
-        ast = load_dumped_data("ast", "kafka")
+    project_name = sys.argv[1]
+    if os.path.exists("./Data/ast/ast-{project}.pkl".format(project=project_name)):
+        ast = load_dumped_data("ast", project_name)
 
     X, Y = build_word_dict(ast)
 
@@ -116,7 +118,7 @@ if __name__ == '__main__':
     model.add(Embedding(MAX_NB_WORDS, EMBEDDING_DIM, input_length=X.shape[1]))
     model.add(SpatialDropout1D(0.2))
     model.add(LSTM(128, dropout=0, recurrent_dropout=0))
-    model.add(SpatialDropout1D(0.2))
+    model.add(Dropout(0.2))
     model.add(Dense(5, activation='softmax'))
     model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
     history = model.fit(X_train, Y_train, epochs=epochs, batch_size=batch_size, verbose=1, validation_split=0.1,

@@ -35,7 +35,9 @@ class Block:
         for feature in self.syntactic_feature[::-1]:
             self.combine_feature.insert(0, feature)
             if feature == "LogStatement" and not visit_log_statement:
+                self.combine_feature.remove("LogStatement")
                 visit_log_statement = True
                 self.combine_feature.insert(0, "#MsgEnd#")
                 self.combine_feature = copy.deepcopy(self.log_message_feature) + self.combine_feature
                 self.combine_feature.insert(0, "#MsgStart#")
+                self.combine_feature.insert(0, "LogStatement")
