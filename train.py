@@ -94,7 +94,11 @@ def stratified_random_sampling(X, Y):
         Y_train = np.vstack([Y_train, Y_train_list[i]])
         Y_test = np.vstack([Y_test, Y_test_list[i]])
 
-    return X_train, X_test, Y_train, Y_test
+    random_train = np.array(range(0, len(X_train)))
+    np.random.shuffle(random_train)
+    random_test = np.array(range(0, len(X_test)))
+    np.random.shuffle(random_test)
+    return X_train[random_train], X_test[random_test], Y_train[random_train], Y_test[random_test]
 
 
 if __name__ == '__main__':
@@ -112,7 +116,7 @@ if __name__ == '__main__':
     model.add(Embedding(MAX_NB_WORDS, EMBEDDING_DIM, input_length=X.shape[1]))
     model.add(SpatialDropout1D(0.2))
     model.add(LSTM(128, dropout=0.2, recurrent_dropout=0.2))
-    model.add(Dense(10, activation='softmax'))
+    model.add(Dense(5, activation='softmax'))
     model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
     history = model.fit(X_train, Y_train, epochs=epochs, batch_size=batch_size, verbose=1, validation_split=0.1,
                         callbacks=[EarlyStopping(monitor='val_loss', patience=3, min_delta=0.0001)])
