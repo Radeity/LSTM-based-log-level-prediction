@@ -1,5 +1,6 @@
 import copy
 import os.path
+import sys
 import pickle
 import re
 from collections import defaultdict
@@ -9,7 +10,7 @@ exclude_type = {"Block", "SimpleName", "SimpleType"}  # , "QualifiedName"}
 SEEK_LOG_TYPE = "ExpressionStatement"
 LOG_TYPE = "LogStatement"
 BLOCK_TYPE = {"Block", "SwitchCase", "IfStatement"}
-LOG_PREFIX = {"log.", "logg", "logl"}
+LOG_PREFIX = {".info(", ".trace(", ".debug(", ".warn(", ".error("}  # "log.", "logg", "logl", "log_",
 
 
 class Log:
@@ -81,7 +82,7 @@ def parse_AST(project_name, logs):
                 log_cnt = 0
 
             # meet the block end line, pop
-            while len(stack) > 0 and cur_begin_line >= stack[-1][0]:
+            while len(stack) > 0 and (cur_begin_line >= stack[-1][0] or last_method != cur_method):
                 top = stack.pop()
                 top_log_block = top[1]
                 top_log_block.syntactic_feature = copy.deepcopy(syntactic_feature)
@@ -106,11 +107,19 @@ def parse_AST(project_name, logs):
             syntactic_feature.append(single_ast[1])
 
         # match log statement
-        if single_ast[1] == SEEK_LOG_TYPE and single_ast[2][0:4].lower() in LOG_PREFIX:
+        if single_ast[1] == SEEK_LOG_TYPE and any(i in single_ast[2].lower() for i in LOG_PREFIX):#single_ast[2][0:4].lower() in LOG_PREFIX:
             log_line = cur_end_line
             syntactic_feature[-1] = LOG_TYPE
             log_match_flag = True
             log_cnt += 1
+
+    # pop all log blocks
+    while len(stack) > 0:
+        top = stack.pop()
+        top_log_block = top[1]
+        top_log_block.syntactic_feature = copy.deepcopy(syntactic_feature)
+        top_log_block.gen_combine_feature()
+        blocks.append(top_log_block)
 
     ast_path = './Data/ast/ast-{project_name}.pkl'.format(project_name=project_name)
     with open(ast_path, 'wb') as pkl_file:
@@ -141,17 +150,18 @@ def count_feature(ast):
 
 
 if __name__ == '__main__':
+    project_name = sys.argv[1]
     # parse logs-*.txt
-    if os.path.exists("./Data/log/log-kafka.pkl"):
-        logs = load_dumped_data("log", "kafka")
+    if os.path.exists("./Data/log/log-{project}.pkl".format(project=project_name)):
+        logs = load_dumped_data("log", project_name)
     else:
-        logs = parse_logs("kafka")
+        logs = parse_logs(project_name)
 
-    # # parse AST-*.txt
-    # ast = parse_AST("kafka", logs)
+    # parse AST-*.txt
+    ast = parse_AST(project_name, logs)
 
-    if os.path.exists("./Data/ast/ast-kafka.pkl"):
-        ast = load_dumped_data("ast", "kafka")
+    if os.path.exists("./Data/ast/ast-{project}.pkl".format(project=project_name)):
+        ast = load_dumped_data("ast", project_name)
     else:
         print(False)
 

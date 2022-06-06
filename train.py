@@ -5,8 +5,8 @@ import numpy as np
 from keras_preprocessing.text import Tokenizer
 from sklearn.model_selection import train_test_split
 from tensorflow.keras.preprocessing.sequence import pad_sequences
-from tensorflow.keras.layers import Embedding, LSTM, SpatialDropout1D, Dense
-from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Embedding, LSTM, SpatialDropout1D, Dropout, Dense
+from tensorflow.keras.models import Sequential, load_model
 from tensorflow.keras.callbacks import EarlyStopping
 
 ordinal_label_level = {
@@ -115,10 +115,15 @@ if __name__ == '__main__':
     model = Sequential()
     model.add(Embedding(MAX_NB_WORDS, EMBEDDING_DIM, input_length=X.shape[1]))
     model.add(SpatialDropout1D(0.2))
-    model.add(LSTM(128, dropout=0.2, recurrent_dropout=0.2))
+    model.add(LSTM(128, dropout=0, recurrent_dropout=0))
+    model.add(SpatialDropout1D(0.2))
     model.add(Dense(5, activation='softmax'))
     model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
     history = model.fit(X_train, Y_train, epochs=epochs, batch_size=batch_size, verbose=1, validation_split=0.1,
                         callbacks=[EarlyStopping(monitor='val_loss', patience=3, min_delta=0.0001)])
 
-    print("end!")
+    print("saving model......")
+
+    model.save('m1.h5')
+    model = load_model('m1.h5')
+    model.summary()
